@@ -6,8 +6,10 @@ mod config;
 mod db;
 mod error;
 mod github;
+mod recommend;
 mod runner;
 mod sync;
+mod web;
 
 use clap::{Parser, Subcommand};
 
@@ -72,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
             println!("✓ archived {n} repositories → {}", cfg.archive_dir.display());
         }
         Command::Serve { port } => {
-            println!("serve on :{port}: not yet implemented");
+            web::serve(port).await?;
         }
     }
     Ok(())

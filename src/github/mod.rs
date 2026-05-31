@@ -41,6 +41,7 @@ pub fn trending_query(created_since: &str, min_stars: u32, language: Option<&str
     q
 }
 
+#[derive(Clone)]
 pub struct GithubClient {
     http: reqwest::Client,
 }
