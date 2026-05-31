@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          staging="starchive-${TARGET}"
+          mkdir "$staging"
+          cp "target/${TARGET}/release/starchive" "$staging/"
+          cp README.md LICENSE "$staging/"
+          tar czf "${staging}.tar.gz" "$staging"
+
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          staging="starchive-${TARGET}"
+          mkdir "$staging"
+          cp "target/${TARGET}/release/starchive.exe" "$staging/"
+          cp README.md LICENSE "$staging/"
+          7z a "${staging}.zip" "$staging"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            starchive-*.tar.gz
+            starchive-*.zip
