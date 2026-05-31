@@ -1,6 +1,7 @@
 //! starchive — track your GitHub stars, archive them as AI-readable markdown,
 //! and discover trending repos from an htmx dashboard.
 
+mod archive;
 mod config;
 mod db;
 mod error;
