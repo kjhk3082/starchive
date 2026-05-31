@@ -83,8 +83,14 @@ mod tests {
     async fn empty_db_adds_all_as_new() {
         let db = Db::memory().await.unwrap();
         let input = vec![
-            star(Repo::sample(1, "a", "x", Some("Rust"), &[]), "2026-05-01T00:00:00Z"),
-            star(Repo::sample(2, "b", "y", Some("Go"), &[]), "2026-05-02T00:00:00Z"),
+            star(
+                Repo::sample(1, "a", "x", Some("Rust"), &[]),
+                "2026-05-01T00:00:00Z",
+            ),
+            star(
+                Repo::sample(2, "b", "y", Some("Go"), &[]),
+                "2026-05-02T00:00:00Z",
+            ),
         ];
         let r = reconcile(&db, input, NOW).await.unwrap();
         assert_eq!((r.added, r.updated, r.removed), (2, 0, 0));

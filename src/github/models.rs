@@ -3,10 +3,10 @@
 //! These functions take `&str` and return typed values — no network — so they
 //! are exhaustively unit-testable. The HTTP shell in `super` calls them.
 //!
-//! Repo objects come from three endpoints with the *same* inner shape:
-//!   - `GET /user/starred` (with `star+json`) → array of `{ starred_at, repo }`
-//!   - `GET /search/repositories`             → `{ items: [repo, ...] }`
-//! Search results frequently omit fields, so every non-identifying field has a
+//! Repo objects come from two endpoints with the *same* inner shape:
+//! `GET /user/starred` (with `star+json`) returns `{ starred_at, repo }` items,
+//! and `GET /search/repositories` returns `{ items: [repo, ...] }`. Search
+//! results frequently omit fields, so every non-identifying field has a
 //! `#[serde(default)]` and tolerates `null`.
 
 use serde::Deserialize;
@@ -90,12 +90,20 @@ pub struct StarredRepo {
 #[cfg(test)]
 impl Repo {
     /// Test fixture builder shared across module tests.
-    pub fn sample(id: i64, owner: &str, name: &str, language: Option<&str>, topics: &[&str]) -> Self {
+    pub fn sample(
+        id: i64,
+        owner: &str,
+        name: &str,
+        language: Option<&str>,
+        topics: &[&str],
+    ) -> Self {
         Repo {
             id,
             name: name.to_string(),
             full_name: format!("{owner}/{name}"),
-            owner: Owner { login: owner.to_string() },
+            owner: Owner {
+                login: owner.to_string(),
+            },
             html_url: format!("https://github.com/{owner}/{name}"),
             description: Some(format!("{name} — a sample repository")),
             homepage: None,
@@ -104,7 +112,9 @@ impl Repo {
             forks_count: 10,
             open_issues_count: 1,
             topics: topics.iter().map(|s| s.to_string()).collect(),
-            license: Some(License { spdx_id: Some("MIT".to_string()) }),
+            license: Some(License {
+                spdx_id: Some("MIT".to_string()),
+            }),
             default_branch: Some("main".to_string()),
             pushed_at: Some("2025-01-01T00:00:00Z".to_string()),
             created_at: Some("2020-01-01T00:00:00Z".to_string()),

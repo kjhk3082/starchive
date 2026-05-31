@@ -52,10 +52,11 @@ impl AppState {
     async fn get_trending(&self) -> Result<Vec<github::Repo>> {
         {
             let cache = self.trending.lock().unwrap();
-            if let Some(at) = cache.fetched_at {
-                if Utc::now() - at < Duration::minutes(TRENDING_TTL_MINUTES) && !cache.repos.is_empty() {
-                    return Ok(cache.repos.clone());
-                }
+            if let Some(at) = cache.fetched_at
+                && Utc::now() - at < Duration::minutes(TRENDING_TTL_MINUTES)
+                && !cache.repos.is_empty()
+            {
+                return Ok(cache.repos.clone());
             }
         }
 
@@ -87,7 +88,7 @@ pub fn router(state: AppState) -> Router {
 }
 
 pub async fn serve(port: u16) -> Result<()> {
-    let config = Config::load(port)?;
+    let config = Config::load()?;
     let db = Db::open(&config.db_path).await?;
     let client = GithubClient::new(&config.token)?;
     let state = AppState::new(db, client, config);

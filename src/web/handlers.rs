@@ -23,14 +23,13 @@ pub async fn dashboard(State(st): State<AppState>) -> Result<Html<String>> {
 /// `POST /stars/refresh` — run the sync pipeline and return the updated stars
 /// list as an htmx partial (new repos pinned to the top).
 pub async fn refresh_stars(State(st): State<AppState>) -> Result<Html<String>> {
-    let report = runner::run_sync(&st.client, &st.db, &st.config.archive_dir, "manual", false).await?;
+    let report =
+        runner::run_sync(&st.client, &st.db, &st.config.archive_dir, "manual", false).await?;
     let stars = st.db.get_stars_sorted().await?;
-    let banner = format!(
-        "Refreshed — {} (★ {} total)",
-        report.summary(),
-        stars.len()
-    );
-    Ok(Html(views::stars_list_inner(&stars, Some(&banner)).into_string()))
+    let banner = format!("Refreshed — {} (★ {} total)", report.summary(), stars.len());
+    Ok(Html(
+        views::stars_list_inner(&stars, Some(&banner)).into_string(),
+    ))
 }
 
 /// `GET /trending` — trending repos plus a personalized "For You" ranking.
@@ -53,9 +52,15 @@ pub async fn archive_view(
     State(st): State<AppState>,
     Path((owner, name)): Path<(String, String)>,
 ) -> Result<Html<String>> {
-    let path: PathBuf = st.config.archive_dir.join(&owner).join(format!("{name}.md"));
+    let path: PathBuf = st
+        .config
+        .archive_dir
+        .join(&owner)
+        .join(format!("{name}.md"));
     let md = tokio::fs::read_to_string(&path).await.map_err(|_| {
-        AppError::msg(format!("No archive for {owner}/{name} yet — run a sync first."))
+        AppError::msg(format!(
+            "No archive for {owner}/{name} yet — run a sync first."
+        ))
     })?;
     let full = format!("{owner}/{name}");
     let html = views::layout(&full, "stars", views::archive_page(&full, &md));
@@ -68,6 +73,10 @@ fn profile_note(profile: &Profile) -> String {
         "Sync your stars to personalize these picks.".to_string()
     } else {
         let langs: Vec<String> = top.into_iter().map(|(l, _)| l).collect();
-        format!("Ranked for you · top languages: {}", langs.join(", "))
+        format!(
+            "Ranked from your {} stars · top languages: {}",
+            profile.total,
+            langs.join(", ")
+        )
     }
 }

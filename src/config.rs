@@ -15,18 +15,15 @@ pub struct Config {
     pub token: String,
     pub db_path: PathBuf,
     pub archive_dir: PathBuf,
-    pub port: u16,
 }
 
 impl Config {
-    /// Load configuration, resolving the GitHub token. `port` only matters for
-    /// `serve`, but it's cheap to carry everywhere.
-    pub fn load(port: u16) -> Result<Self> {
+    /// Load configuration, resolving the GitHub token and data paths.
+    pub fn load() -> Result<Self> {
         Ok(Self {
             token: load_token()?,
             db_path: db_path(),
             archive_dir: archive_dir(),
-            port,
         })
     }
 }
@@ -52,12 +49,12 @@ pub fn load_token() -> Result<String> {
     }
 
     // Fall back to the GitHub CLI if it's installed and logged in.
-    if let Ok(out) = Command::new("gh").args(["auth", "token"]).output() {
-        if out.status.success() {
-            let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !t.is_empty() {
-                return Ok(t);
-            }
+    if let Ok(out) = Command::new("gh").args(["auth", "token"]).output()
+        && out.status.success()
+    {
+        let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !t.is_empty() {
+            return Ok(t);
         }
     }
 

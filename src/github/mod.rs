@@ -33,10 +33,10 @@ pub struct SearchParams {
 /// language. (The Search API cannot sort by *star velocity*; see spec §5.2.)
 pub fn trending_query(created_since: &str, min_stars: u32, language: Option<&str>) -> String {
     let mut q = format!("created:>{created_since} stars:>{min_stars}");
-    if let Some(lang) = language {
-        if !lang.trim().is_empty() {
-            q.push_str(&format!(" language:{lang}"));
-        }
+    if let Some(lang) = language
+        && !lang.trim().is_empty()
+    {
+        q.push_str(&format!(" language:{lang}"));
     }
     q
 }
@@ -53,7 +53,10 @@ impl GithubClient {
             .map_err(|_| AppError::msg("GITHUB_TOKEN contains invalid characters"))?;
         auth.set_sensitive(true);
         headers.insert(AUTHORIZATION, auth);
-        headers.insert("X-GitHub-Api-Version", HeaderValue::from_static(API_VERSION));
+        headers.insert(
+            "X-GitHub-Api-Version",
+            HeaderValue::from_static(API_VERSION),
+        );
 
         let http = reqwest::Client::builder()
             .user_agent(UA)

@@ -18,7 +18,8 @@ pub fn render_markdown(repo: &Repo, readme: Option<&str>, archived_at: &str) -> 
     let license = repo.license_spdx().unwrap_or("—");
     let desc = repo.description.as_deref().unwrap_or("").trim();
     let topics = repo.topics.join(", ");
-    let install_section = readme.and_then(|r| extract_section(r, &["install", "getting started", "setup"]));
+    let install_section =
+        readme.and_then(|r| extract_section(r, &["install", "getting started", "setup"]));
     let install_cmd = guess_install(repo, readme);
 
     let mut out = String::new();
@@ -77,7 +78,9 @@ pub fn render_markdown(repo: &Repo, readme: Option<&str>, archived_at: &str) -> 
     }
 
     // Usage (only if present).
-    if let Some(sec) = readme.and_then(|r| extract_section(r, &["usage", "example", "quick start", "quickstart"])) {
+    if let Some(sec) =
+        readme.and_then(|r| extract_section(r, &["usage", "example", "quick start", "quickstart"]))
+    {
         out.push_str("## Usage\n\n");
         out.push_str(&sec);
         out.push_str("\n\n");
@@ -151,17 +154,19 @@ pub fn guess_install(repo: &Repo, readme: Option<&str>) -> Option<String> {
 pub fn extract_section(readme: &str, keywords: &[&str]) -> Option<String> {
     let lines: Vec<&str> = readme.lines().collect();
     for (i, line) in lines.iter().enumerate() {
-        let Some(level) = heading_level(line) else { continue };
+        let Some(level) = heading_level(line) else {
+            continue;
+        };
         let title = line.trim_start_matches('#').trim().to_lowercase();
         if !keywords.iter().any(|k| title.contains(k)) {
             continue;
         }
         let mut body = Vec::new();
         for next in &lines[i + 1..] {
-            if let Some(l2) = heading_level(next) {
-                if l2 <= level {
-                    break;
-                }
+            if let Some(l2) = heading_level(next)
+                && l2 <= level
+            {
+                break;
             }
             body.push(*next);
         }
@@ -197,7 +202,11 @@ fn first_paragraph(readme: &str) -> Option<String> {
             }
             continue;
         }
-        if heading_level(line).is_some() || t.starts_with("![") || t.starts_with("[![") || t.starts_with('<') {
+        if heading_level(line).is_some()
+            || t.starts_with("![")
+            || t.starts_with("[![")
+            || t.starts_with('<')
+        {
             if !para.is_empty() {
                 break;
             }

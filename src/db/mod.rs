@@ -4,7 +4,6 @@
 //! `archive`/`recommend` consume one uniform type.
 
 use std::path::Path;
-use std::str::FromStr;
 
 use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
@@ -24,7 +23,6 @@ pub struct StarView {
     pub language: Option<String>,
     pub stargazers_count: i64,
     pub topics_json: String,
-    pub starred_at: Option<String>,
     pub is_new: i64,
     pub archived_path: Option<String>,
 }
@@ -93,10 +91,10 @@ impl Db {
     /// Open (creating if needed) a file-backed database with WAL enabled, then
     /// run migrations.
     pub async fn open(path: &Path) -> Result<Self> {
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent)?;
         }
         let opts = SqliteConnectOptions::new()
             .filename(path)
@@ -194,12 +192,14 @@ impl Db {
 
     /// Record where a repo's markdown archive was written.
     pub async fn set_archived(&self, repo_id: i64, path: &str, now: &str) -> Result<()> {
-        sqlx::query("UPDATE stars SET archived_path = ?2, archive_synced_at = ?3 WHERE repo_id = ?1")
-            .bind(repo_id)
-            .bind(path)
-            .bind(now)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "UPDATE stars SET archived_path = ?2, archive_synced_at = ?3 WHERE repo_id = ?1",
+        )
+        .bind(repo_id)
+        .bind(path)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
@@ -269,9 +269,10 @@ impl Db {
 
     #[cfg(test)]
     pub async fn memory() -> Result<Self> {
+        // A single shared connection so the in-memory DB persists across queries.
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
-            .connect_with(SqliteConnectOptions::from_str("sqlite::memory:")?)
+            .connect_with(SqliteConnectOptions::new().filename(":memory:"))
             .await?;
         let db = Self { pool };
         db.migrate().await?;

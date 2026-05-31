@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Sync { git } => {
-            let cfg = Config::load(0)?;
+            let cfg = Config::load()?;
             let client = GithubClient::new(&cfg.token)?;
             let db = Db::open(&cfg.db_path).await?;
             println!("Syncing stars from GitHub…");
@@ -67,11 +67,14 @@ async fn main() -> anyhow::Result<()> {
             println!("  db      → {}", cfg.db_path.display());
         }
         Command::Archive => {
-            let cfg = Config::load(0)?;
+            let cfg = Config::load()?;
             let client = GithubClient::new(&cfg.token)?;
             let db = Db::open(&cfg.db_path).await?;
             let n = runner::run_archive_all(&client, &db, &cfg.archive_dir).await?;
-            println!("✓ archived {n} repositories → {}", cfg.archive_dir.display());
+            println!(
+                "✓ archived {n} repositories → {}",
+                cfg.archive_dir.display()
+            );
         }
         Command::Serve { port } => {
             web::serve(port).await?;

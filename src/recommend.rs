@@ -59,7 +59,13 @@ const POPULARITY_WEIGHT: f64 = 0.01;
 /// Score and rank trending repos for the user. Language match dominates, topics
 /// add up, and a logarithmic popularity term breaks ties.
 pub fn score_trending(profile: &Profile, trending: &[Repo]) -> Vec<Scored> {
-    let max_lang = profile.languages.values().copied().max().unwrap_or(1).max(1) as f64;
+    let max_lang = profile
+        .languages
+        .values()
+        .copied()
+        .max()
+        .unwrap_or(1)
+        .max(1) as f64;
     let max_topic = profile.topics.values().copied().max().unwrap_or(1).max(1) as f64;
 
     let mut scored: Vec<Scored> = trending
@@ -68,11 +74,11 @@ pub fn score_trending(profile: &Profile, trending: &[Repo]) -> Vec<Scored> {
             let mut score = 0.0;
             let mut reasons = Vec::new();
 
-            if let Some(lang) = &r.language {
-                if let Some(&c) = profile.languages.get(lang) {
-                    score += (c as f64 / max_lang) * LANG_WEIGHT;
-                    reasons.push(format!("{lang} matches your stars"));
-                }
+            if let Some(lang) = &r.language
+                && let Some(&c) = profile.languages.get(lang)
+            {
+                score += (c as f64 / max_lang) * LANG_WEIGHT;
+                reasons.push(format!("{lang} matches your stars"));
             }
 
             let matched: Vec<String> = r
