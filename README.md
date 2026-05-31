@@ -16,9 +16,9 @@ GitHub stars ──▶ local SQLite ──▶ AI-readable markdown archive
 
 ## Screenshots
 
-| Your Stars | Trending + For You |
+| Your Stars | Archive (license + AI summary) |
 |---|---|
-| ![Stars dashboard](docs/screenshots/stars.png) | ![Trending](docs/screenshots/trending.png) |
+| ![Stars dashboard](docs/screenshots/stars.png) | ![Archive](docs/screenshots/archive.png) |
 
 ## Why
 
@@ -26,8 +26,11 @@ GitHub stars ──▶ local SQLite ──▶ AI-readable markdown archive
   you (or your coding agent) can grep, read, and reason over offline.
 - **Discovery that knows you.** The "For You" feed scores GitHub's trending repos against
   the languages and topics you actually star — with a one-line reason for each pick.
+- **Bring your own LLM (optional).** Add an OpenRouter, Anthropic, or OpenAI key to get
+  AI repo summaries, plain-language license explanations, and project-based discovery —
+  "describe your project, get the right repos." All answers follow the UI language.
 - **Zero infrastructure.** One binary, one SQLite file. No server, no account, no tracking.
-  It reuses your existing `gh` login, so setup is nothing.
+  It reuses your existing `gh` login, so setup is nothing. Bilingual (English / 한국어).
 
 ## Install
 
@@ -84,7 +87,28 @@ A classic or fine-grained token with public read scope is enough (the same one `
 | `GITHUB_TOKEN` | — | GitHub API token (falls back to `gh auth token`) |
 | `STARCHIVE_DB` | `data/starchive.db` | SQLite database path |
 | `STARCHIVE_ARCHIVE` | `archive/` | Markdown archive directory |
+| `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | — | Enables AI features (optional) |
+| `STARCHIVE_LLM_PROVIDER` | auto-detect | `openrouter` \| `anthropic` \| `openai` |
+| `STARCHIVE_LLM_MODEL` | per-provider | e.g. `qwen/qwen3.5-plus-20260420` |
 | `RUST_LOG` | `starchive=info` | Log level |
+
+Secrets are read from the environment only. Copy `.env.example` to `.env` (which is
+git-ignored) and fill in one key — keys are never written to source or committed.
+
+## AI features (optional)
+
+Set any one provider key and starchive lights up three AI features, all answered in the
+UI language (English or Korean):
+
+- **Project discovery** — describe what you're building on the **Discover** tab; starchive
+  extracts keywords, searches both your stars and GitHub, then ranks the best fits with a
+  one-line reason for each.
+- **Repo summaries** — each archive page generates a plain-language "what is this / when to
+  use it" summary, cached per repo and language.
+- **License explainer** — every repo's license is explained in plain language (this one
+  needs no key — it's built in).
+
+No key? Every non-AI feature works exactly the same; the AI bits are simply hidden.
 
 ## The markdown archive
 

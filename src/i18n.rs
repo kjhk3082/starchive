@@ -186,6 +186,118 @@ impl Lang {
             Lang::Ko => format!("토픽: {topics}"),
         }
     }
+
+    // --- Chrome additions ----------------------------------------------------
+    pub fn nav_discover(self) -> &'static str {
+        match self {
+            Lang::En => "Discover",
+            Lang::Ko => "발견",
+        }
+    }
+    pub fn credit(self) -> &'static str {
+        match self {
+            Lang::En => "Developer",
+            Lang::Ko => "개발자",
+        }
+    }
+    pub fn stat_stars(self) -> &'static str {
+        match self {
+            Lang::En => "stars",
+            Lang::Ko => "스타",
+        }
+    }
+    pub fn search_placeholder(self) -> &'static str {
+        match self {
+            Lang::En => "Search your stars…",
+            Lang::Ko => "스타 검색…",
+        }
+    }
+
+    // --- Discover page -------------------------------------------------------
+    pub fn discover_title(self) -> &'static str {
+        match self {
+            Lang::En => "Discover repos for your project",
+            Lang::Ko => "내 프로젝트에 맞는 레포 발견",
+        }
+    }
+    pub fn discover_sub(self) -> &'static str {
+        match self {
+            Lang::En => {
+                "Describe what you're building — get matching repos from your stars and GitHub."
+            }
+            Lang::Ko => "만들고 있는 걸 설명하면, 내 스타와 GitHub에서 어울리는 레포를 찾아줍니다.",
+        }
+    }
+    pub fn discover_placeholder(self) -> &'static str {
+        match self {
+            Lang::En => {
+                "e.g. A Rust CLI that syncs Notion pages to local markdown with offline full-text search…"
+            }
+            Lang::Ko => {
+                "예: 노션 페이지를 로컬 마크다운으로 동기화하고 오프라인 전문검색되는 Rust CLI…"
+            }
+        }
+    }
+    pub fn discover_btn(self) -> &'static str {
+        match self {
+            Lang::En => "✨ Find repos",
+            Lang::Ko => "✨ 레포 찾기",
+        }
+    }
+    pub fn discover_waiting(self) -> &'static str {
+        match self {
+            Lang::En => "⏳ The AI is searching and ranking repos — this can take up to a minute.",
+            Lang::Ko => "⏳ AI가 레포를 검색하고 평가하는 중 — 최대 1분 정도 걸릴 수 있어요.",
+        }
+    }
+    pub fn discover_none(self) -> &'static str {
+        match self {
+            Lang::En => "No matches — try describing your project differently.",
+            Lang::Ko => "맞는 결과가 없어요 — 프로젝트 설명을 바꿔보세요.",
+        }
+    }
+    pub fn discover_nokey_title(self) -> &'static str {
+        match self {
+            Lang::En => "An LLM API key is required.",
+            Lang::Ko => "LLM API 키가 필요해요.",
+        }
+    }
+    pub fn discover_nokey_hint(self) -> &'static str {
+        match self {
+            Lang::En => {
+                "Set OPENROUTER_API_KEY (or ANTHROPIC_API_KEY / OPENAI_API_KEY) in .env to enable AI discovery."
+            }
+            Lang::Ko => {
+                ".env에 OPENROUTER_API_KEY(또는 ANTHROPIC_API_KEY / OPENAI_API_KEY)를 넣으면 AI 발견 기능이 켜집니다."
+            }
+        }
+    }
+    pub fn your_star(self) -> &'static str {
+        match self {
+            Lang::En => "★ your star",
+            Lang::Ko => "★ 내 스타",
+        }
+    }
+    pub fn via_github(self) -> &'static str {
+        match self {
+            Lang::En => "🔎 GitHub",
+            Lang::Ko => "🔎 GitHub",
+        }
+    }
+
+    // --- AI summary ----------------------------------------------------------
+    pub fn ai_summary_title(self) -> &'static str {
+        match self {
+            Lang::En => "AI Summary",
+            Lang::Ko => "AI 요약",
+        }
+    }
+    pub fn ai_generating(self) -> &'static str {
+        match self {
+            Lang::En => "Generating…",
+            Lang::Ko => "생성 중…",
+        }
+    }
 }
 
 /// Resolve from cookie → `Accept-Language` → default.

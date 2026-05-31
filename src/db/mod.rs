@@ -267,6 +267,61 @@ impl Db {
         Ok(row.map(RepoRow::into_repo))
     }
 
+    /// Look up a repo's id by `owner/name` (for archive/summary routes).
+    pub async fn repo_id_by_full_name(&self, owner: &str, name: &str) -> Result<Option<i64>> {
+        let row: Option<(i64,)> =
+            sqlx::query_as("SELECT id FROM repos WHERE owner = ?1 AND name = ?2")
+                .bind(owner)
+                .bind(name)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row.map(|(id,)| id))
+    }
+
+    /// Cached LLM text for a repo, if present.
+    pub async fn get_ai_cache(
+        &self,
+        repo_id: i64,
+        lang: &str,
+        kind: &str,
+    ) -> Result<Option<String>> {
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT content FROM ai_cache WHERE repo_id = ?1 AND lang = ?2 AND kind = ?3",
+        )
+        .bind(repo_id)
+        .bind(lang)
+        .bind(kind)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|(c,)| c))
+    }
+
+    pub async fn set_ai_cache(
+        &self,
+        repo_id: i64,
+        lang: &str,
+        kind: &str,
+        content: &str,
+        model: &str,
+        now: &str,
+    ) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO ai_cache (repo_id, lang, kind, content, model, created_at)
+             VALUES (?1,?2,?3,?4,?5,?6)
+             ON CONFLICT(repo_id, lang, kind) DO UPDATE SET
+               content = excluded.content, model = excluded.model, created_at = excluded.created_at",
+        )
+        .bind(repo_id)
+        .bind(lang)
+        .bind(kind)
+        .bind(content)
+        .bind(model)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     #[cfg(test)]
     pub async fn memory() -> Result<Self> {
         // A single shared connection so the in-memory DB persists across queries.

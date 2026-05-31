@@ -1,19 +1,22 @@
 //! Route handlers. Rendering handlers take a `lang: Lang` extractor and return
 //! `Result<Html<String>>`; `AppError` renders as a 500 (see [`super`]).
 
-use axum::extract::{Path, State};
+use axum::extract::{Form, Path, State};
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE, LOCATION, REFERER, SET_COOKIE};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
+use chrono::Utc;
+use serde::Deserialize;
 
+use crate::ai;
 use crate::error::{AppError, Result};
+use crate::github::models::Repo;
 use crate::i18n::Lang;
-use crate::recommend;
+use crate::recommend::{self, Profile};
 use crate::runner;
 use crate::web::{AppState, views};
 
-/// `GET /` — the Stars dashboard. Highlights are acknowledged (cleared) after
-/// the page is rendered, so newly-synced repos glow once.
+/// `GET /` — the Stars dashboard.
 pub async fn dashboard(lang: Lang, State(st): State<AppState>) -> Result<Html<String>> {
     let stars = st.db.get_stars_sorted().await?;
     let html = views::layout(
@@ -26,8 +29,7 @@ pub async fn dashboard(lang: Lang, State(st): State<AppState>) -> Result<Html<St
     Ok(Html(html))
 }
 
-/// `POST /stars/refresh` — run the sync pipeline and return the updated stars
-/// list as an htmx partial (new repos pinned to the top).
+/// `POST /stars/refresh` — sync, then return the updated stars list partial.
 pub async fn refresh_stars(lang: Lang, State(st): State<AppState>) -> Result<Html<String>> {
     let report =
         runner::run_sync(&st.client, &st.db, &st.config.archive_dir, "manual", false).await?;
@@ -38,14 +40,41 @@ pub async fn refresh_stars(lang: Lang, State(st): State<AppState>) -> Result<Htm
     ))
 }
 
-/// `GET /trending` — trending repos plus a personalized "For You" ranking.
+/// `GET /trending` — trending + personalized "For You".
 pub async fn trending(lang: Lang, State(st): State<AppState>) -> Result<Html<String>> {
     let trending = st.get_trending().await?;
+    let (for_you, note) = rank_for_you(lang, &st, &trending).await?;
+    let body = views::trending_page(lang, &trending, &for_you, &note);
+    Ok(Html(views::layout(
+        lang,
+        lang.nav_trending(),
+        "trending",
+        body,
+    )))
+}
+
+/// `POST /trending/refresh` — refetch trending (bypassing cache), return partial.
+pub async fn trending_refresh(lang: Lang, State(st): State<AppState>) -> Result<Html<String>> {
+    let trending = st.refresh_trending().await?;
+    let (for_you, note) = rank_for_you(lang, &st, &trending).await?;
+    Ok(Html(
+        views::trending_inner(lang, &trending, &for_you, &note).into_string(),
+    ))
+}
+
+async fn rank_for_you(
+    lang: Lang,
+    st: &AppState,
+    trending: &[Repo],
+) -> Result<(Vec<recommend::Scored>, String)> {
     let active = st.db.get_active_repos().await?;
     let profile = recommend::build_profile(&active);
-    let for_you = recommend::score_trending(&profile, &trending);
+    let for_you = recommend::score_trending(&profile, trending);
+    Ok((for_you, profile_note(lang, &profile)))
+}
 
-    let note = if profile.total == 0 {
+fn profile_note(lang: Lang, profile: &Profile) -> String {
+    if profile.total == 0 {
         lang.profile_note_empty().to_string()
     } else {
         let langs: Vec<String> = profile
@@ -54,32 +83,111 @@ pub async fn trending(lang: Lang, State(st): State<AppState>) -> Result<Html<Str
             .map(|(l, _)| l)
             .collect();
         lang.profile_note(profile.total, &langs.join(", "))
-    };
-
-    let html = views::layout(
-        lang,
-        lang.nav_trending(),
-        "trending",
-        views::trending_page(lang, &trending, &for_you, &note),
-    );
-    Ok(Html(html))
+    }
 }
 
-/// `GET /archive/{owner}/{name}` — render a repo's stored markdown archive.
+/// `GET /discover` — project-based discovery form.
+pub async fn discover_page(lang: Lang, State(st): State<AppState>) -> Result<Html<String>> {
+    let body = views::discover_page(lang, st.llm.is_some());
+    Ok(Html(views::layout(
+        lang,
+        lang.nav_discover(),
+        "discover",
+        body,
+    )))
+}
+
+#[derive(Deserialize)]
+pub struct DiscoverForm {
+    description: String,
+}
+
+/// `POST /discover` — run LLM discovery, return result cards.
+pub async fn discover_run(
+    lang: Lang,
+    State(st): State<AppState>,
+    Form(form): Form<DiscoverForm>,
+) -> Result<Html<String>> {
+    let Some(llm) = &st.llm else {
+        return Ok(Html(views::discover_results(lang, &[]).into_string()));
+    };
+    let desc = form.description.trim();
+    if desc.is_empty() {
+        return Ok(Html(views::discover_results(lang, &[]).into_string()));
+    }
+    let stars = st.db.get_active_repos().await?;
+    match ai::discover(llm, &st.client, &stars, desc, lang).await {
+        Ok(recs) => Ok(Html(views::discover_results(lang, &recs).into_string())),
+        Err(e) => Ok(Html(error_fragment(&e.to_string()))),
+    }
+}
+
+/// `GET /archive/{owner}/{name}` — rendered markdown archive + license + AI summary slot.
 pub async fn archive_view(
     lang: Lang,
     State(st): State<AppState>,
     Path((owner, name)): Path<(String, String)>,
 ) -> Result<Html<String>> {
     let md = read_archive(&st, &owner, &name).await?;
+    let body_html = render_markdown_html(&md);
+
+    let license = match st.db.repo_id_by_full_name(&owner, &name).await? {
+        Some(id) => st
+            .db
+            .get_repo(id)
+            .await?
+            .and_then(|r| r.license_spdx().and_then(crate::license::explain)),
+        None => None,
+    };
+
     let title = format!("{owner}/{name}");
-    let html = views::layout(
+    let body = views::archive_page(
         lang,
-        &title,
-        "stars",
-        views::archive_page(lang, &owner, &name, &md),
+        &owner,
+        &name,
+        &body_html,
+        license.as_ref(),
+        st.llm.is_some(),
     );
-    Ok(Html(html))
+    Ok(Html(views::layout(lang, &title, "stars", body)))
+}
+
+/// `POST /archive/{owner}/{name}/summary` — AI summary (cached per repo+lang).
+pub async fn archive_summary(
+    lang: Lang,
+    State(st): State<AppState>,
+    Path((owner, name)): Path<(String, String)>,
+) -> Result<Html<String>> {
+    let Some(llm) = &st.llm else {
+        return Ok(Html(String::new()));
+    };
+    let Some(repo_id) = st.db.repo_id_by_full_name(&owner, &name).await? else {
+        return Ok(Html(String::new()));
+    };
+
+    if let Some(cached) = st.db.get_ai_cache(repo_id, lang.code(), "summary").await? {
+        return Ok(Html(render_summary(lang, &cached)));
+    }
+    let Some(repo) = st.db.get_repo(repo_id).await? else {
+        return Ok(Html(String::new()));
+    };
+
+    let readme = st
+        .client
+        .fetch_readme(repo.owner(), &repo.name)
+        .await
+        .unwrap_or(None);
+    match ai::repo_summary(llm, &repo, readme.as_deref(), lang).await {
+        Ok(summary) => {
+            let now = Utc::now().to_rfc3339();
+            st.db
+                .set_ai_cache(repo_id, lang.code(), "summary", &summary, llm.model(), &now)
+                .await
+                .ok();
+            Ok(Html(render_summary(lang, &summary)))
+        }
+        Err(e) => Ok(Html(render_summary(lang, &format!("⚠ {e}")))),
+    }
 }
 
 /// `GET /archive/{owner}/{name}/raw` — download the raw markdown file.
@@ -88,7 +196,6 @@ pub async fn archive_raw(
     Path((owner, name)): Path<(String, String)>,
 ) -> Result<Response> {
     let md = read_archive(&st, &owner, &name).await?;
-    // Sanitize the filename so it can't inject into the header.
     let safe: String = name
         .chars()
         .filter(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.'))
@@ -102,6 +209,12 @@ pub async fn archive_raw(
         md,
     )
         .into_response())
+}
+
+/// `GET /favicon.svg` — a gold star, so browsers stop 404-ing on the favicon.
+pub async fn favicon() -> Response {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#d29922"><path d="M12 .6l3.1 7.3 7.9.6-6 5.1 1.9 7.7L12 18.3 5.1 22.4 7 14.7l-6-5.1 7.9-.6z"/></svg>"##;
+    ([(CONTENT_TYPE, "image/svg+xml")], svg).into_response()
 }
 
 /// `GET /lang/{code}` — set the language cookie and return to the previous page.
@@ -123,6 +236,24 @@ pub async fn set_lang(Path(code): Path<String>, headers: HeaderMap) -> Response 
         .into_response()
 }
 
+fn render_summary(lang: Lang, text: &str) -> String {
+    views::ai_summary(lang, text).into_string()
+}
+
+fn error_fragment(msg: &str) -> String {
+    let safe = msg.replace('<', "&lt;");
+    format!("<div class=\"empty\"><p class=\"sub\">⚠ {safe}</p></div>")
+}
+
+fn render_markdown_html(md: &str) -> String {
+    let mut opts = comrak::Options::default();
+    opts.extension.table = true;
+    opts.extension.strikethrough = true;
+    opts.extension.autolink = true;
+    opts.extension.tasklist = true;
+    comrak::markdown_to_html(md, &opts)
+}
+
 async fn read_archive(st: &AppState, owner: &str, name: &str) -> Result<String> {
     let path = st.config.archive_dir.join(owner).join(format!("{name}.md"));
     tokio::fs::read_to_string(&path).await.map_err(|_| {
@@ -132,7 +263,7 @@ async fn read_archive(st: &AppState, owner: &str, name: &str) -> Result<String> 
     })
 }
 
-/// Extract just the path+query of a Referer so any redirect stays same-origin.
+/// Extract just the path of a Referer so any redirect stays same-origin.
 fn referer_path(referer: &str) -> Option<String> {
     let path = if let Some(idx) = referer.find("://") {
         let after = &referer[idx + 3..];
@@ -142,7 +273,6 @@ fn referer_path(referer: &str) -> Option<String> {
     } else {
         return None;
     };
-    // Reject protocol-relative ("//host") targets.
     if path.starts_with("//") {
         Some("/".to_string())
     } else {

@@ -1,12 +1,15 @@
 //! starchive — track your GitHub stars, archive them as AI-readable markdown,
 //! and discover trending repos from an htmx dashboard.
 
+mod ai;
 mod archive;
 mod config;
 mod db;
 mod error;
 mod github;
 mod i18n;
+mod license;
+mod llm;
 mod recommend;
 mod runner;
 mod sync;
@@ -48,6 +51,9 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env (API keys etc.) if present; real env vars still take precedence.
+    dotenvy::dotenv().ok();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
