@@ -1,0 +1,16 @@
+# OS / editor
+.DS_Store
+*.swp
+
+# Rust
+/target
+Cargo.lock
+
+# Local data (DB is regenerable)
+*.db
+*.db-wal
+*.db-shm
+/data
+
+# Env
+.env
