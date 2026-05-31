@@ -65,8 +65,8 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Command::Sync { git } => {
             let cfg = Config::load()?;
-            let client = GithubClient::new(&cfg.token)?;
             let db = Db::open(&cfg.db_path).await?;
+            let client = cli_github_client(&db).await?;
             println!("Syncing stars from GitHub…");
             let report = runner::run_sync(&client, &db, &cfg.archive_dir, "manual", git).await?;
             println!("✓ {}", report.summary());
@@ -75,8 +75,8 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Archive => {
             let cfg = Config::load()?;
-            let client = GithubClient::new(&cfg.token)?;
             let db = Db::open(&cfg.db_path).await?;
+            let client = cli_github_client(&db).await?;
             let n = runner::run_archive_all(&client, &db, &cfg.archive_dir).await?;
             println!(
                 "✓ archived {n} repositories → {}",
@@ -88,4 +88,14 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// Resolve a GitHub client for the CLI (token: DB settings → env → `gh`).
+async fn cli_github_client(db: &Db) -> anyhow::Result<GithubClient> {
+    let token = config::resolve_github_token(db).await?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "No GitHub token. Set GITHUB_TOKEN, run `gh auth login`, or add one in the dashboard (starchive serve → Settings)."
+        )
+    })?;
+    Ok(GithubClient::new(&token)?)
 }

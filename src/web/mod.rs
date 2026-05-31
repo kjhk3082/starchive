@@ -33,27 +33,40 @@ struct TrendingCache {
 #[derive(Clone)]
 pub struct AppState {
     pub db: Db,
-    pub client: GithubClient,
     pub config: Arc<Config>,
-    /// Runtime-swappable so the settings page can change the key without a restart.
+    /// Both are runtime-swappable so the settings page can connect GitHub / change
+    /// the LLM key without a restart.
+    client: Arc<RwLock<Option<GithubClient>>>,
     llm: Arc<RwLock<Option<Llm>>>,
     trending: Arc<Mutex<TrendingCache>>,
 }
 
 impl AppState {
-    fn new(db: Db, client: GithubClient, config: Config, llm: Option<Llm>) -> Self {
+    fn new(db: Db, client: Option<GithubClient>, config: Config, llm: Option<Llm>) -> Self {
         Self {
             db,
-            client,
             config: Arc::new(config),
+            client: Arc::new(RwLock::new(client)),
             llm: Arc::new(RwLock::new(llm)),
             trending: Arc::new(Mutex::new(TrendingCache::default())),
         }
     }
 
+    /// Clone out the current GitHub client (never held across an await).
+    pub fn current_client(&self) -> Option<GithubClient> {
+        self.client.read().unwrap().clone()
+    }
+
     /// Clone out the current LLM client (never held across an await).
     pub fn current_llm(&self) -> Option<Llm> {
         self.llm.read().unwrap().clone()
+    }
+
+    /// Re-resolve the GitHub client from DB token (then env/gh) and hot-swap it.
+    async fn reload_github(&self) -> Result<()> {
+        let resolved = resolve_github(&self.db).await?;
+        *self.client.write().unwrap() = resolved;
+        Ok(())
     }
 
     /// Re-resolve the LLM from DB settings (then env) and hot-swap it in.
@@ -77,8 +90,12 @@ impl AppState {
         self.refresh_trending().await
     }
 
-    /// Force a fresh trending fetch and update the cache.
+    /// Force a fresh trending fetch and update the cache. No GitHub connection
+    /// yet → empty (the page then prompts the user to connect).
     async fn refresh_trending(&self) -> Result<Vec<github::Repo>> {
+        let Some(client) = self.current_client() else {
+            return Ok(Vec::new());
+        };
         let since = (Utc::now() - Duration::days(TRENDING_WINDOW_DAYS))
             .format("%Y-%m-%d")
             .to_string();
@@ -86,7 +103,7 @@ impl AppState {
             query: trending_query(&since, TRENDING_MIN_STARS, None),
             per_page: TRENDING_PER_PAGE,
         };
-        let repos = self.client.search_trending(&params).await?;
+        let repos = client.search_trending(&params).await?;
         {
             let mut cache = self.trending.lock().unwrap();
             cache.fetched_at = Some(Utc::now());
@@ -139,14 +156,28 @@ async fn resolve_llm(db: &Db) -> Result<Option<Llm>> {
     Ok(Llm::from_env())
 }
 
+/// Resolve the GitHub client: dashboard token (DB) → env → `gh auth token`.
+async fn resolve_github(db: &Db) -> Result<Option<GithubClient>> {
+    match crate::config::resolve_github_token(db).await? {
+        Some(token) => Ok(Some(GithubClient::new(&token)?)),
+        None => Ok(None),
+    }
+}
+
 pub async fn serve(port: u16) -> Result<()> {
     let config = Config::load()?;
     let db = Db::open(&config.db_path).await?;
-    let client = GithubClient::new(&config.token)?;
+    let client = resolve_github(&db).await?;
     let llm = resolve_llm(&db).await?;
+    match &client {
+        Some(_) => println!("GitHub connected."),
+        None => println!(
+            "GitHub not connected — add a token in Settings (⚙), GITHUB_TOKEN, or `gh auth login`"
+        ),
+    }
     match &llm {
         Some(l) => println!("LLM enabled: {} ({})", l.provider().label(), l.model()),
-        None => println!("LLM disabled — add a key in the dashboard Settings page, or via .env"),
+        None => println!("LLM disabled — add a key in Settings (⚙), or via .env"),
     }
     let state = AppState::new(db, client, config, llm);
 

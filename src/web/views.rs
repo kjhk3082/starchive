@@ -463,10 +463,16 @@ pub fn archive_page(
     }
 }
 
-/// Settings page: connect an AI provider (key stored locally, never committed).
-pub fn settings_page(lang: Lang, current: Option<&Llm>, saved: bool) -> Markup {
-    let cur_provider = current.map(|l| l.provider());
-    let cur_model = current.map(|l| l.model()).unwrap_or("");
+/// Settings page: connect GitHub + an AI provider. Keys stay in the local DB.
+pub fn settings_page(
+    lang: Lang,
+    github_connected: bool,
+    github_login: Option<&str>,
+    llm: Option<&Llm>,
+    saved: bool,
+) -> Markup {
+    let cur_provider = llm.map(|l| l.provider());
+    let cur_model = llm.map(|l| l.model()).unwrap_or("");
     let ph_model = cur_provider
         .unwrap_or(Provider::OpenRouter)
         .placeholder_model();
@@ -474,14 +480,35 @@ pub fn settings_page(lang: Lang, current: Option<&Llm>, saved: bool) -> Markup {
         div.row { div { h1 { (lang.settings_title()) } div.sub { (lang.settings_sub()) } } }
         @if saved { div.banner { (lang.settings_saved()) } }
 
-        div.sub style="margin-bottom:6px" {
-            @match current {
-                Some(l) => { (lang.settings_status_on(l.provider().label(), l.model())) }
-                None => { (lang.settings_status_off()) }
-            }
-        }
-
         form method="post" action="/settings" {
+            // --- GitHub ---
+            h2 { (lang.settings_github()) }
+            div.sub style="margin:-6px 0 8px" { (lang.settings_github_sub()) }
+            div.sub style="margin-bottom:4px" {
+                @if github_connected {
+                    @match github_login {
+                        Some(login) => { (lang.settings_github_on(login)) }
+                        None => { (lang.settings_github_on_plain()) }
+                    }
+                } @else {
+                    (lang.settings_github_off())
+                }
+            }
+            div.frow {
+                label { (lang.settings_github_token()) }
+                input type="password" name="github_token" autocomplete="off"
+                    placeholder=(lang.settings_github_token_ph());
+                div.sub style="margin-top:6px" { (lang.settings_github_help()) }
+            }
+
+            // --- AI provider ---
+            h2 { (lang.settings_ai()) }
+            div.sub style="margin-bottom:6px" {
+                @match llm {
+                    Some(l) => { (lang.settings_status_on(l.provider().label(), l.model())) }
+                    None => { (lang.settings_status_off()) }
+                }
+            }
             div.frow {
                 label { (lang.settings_provider()) }
                 select name="provider" {
@@ -499,6 +526,7 @@ pub fn settings_page(lang: Lang, current: Option<&Llm>, saved: bool) -> Markup {
                 label { (lang.settings_model()) }
                 input type="text" name="model" value=(cur_model) placeholder=(ph_model);
             }
+
             button.btn type="submit" { (lang.settings_save_btn()) }
         }
 

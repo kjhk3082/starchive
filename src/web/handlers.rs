@@ -31,8 +31,13 @@ pub async fn dashboard(lang: Lang, State(st): State<AppState>) -> Result<Html<St
 
 /// `POST /stars/refresh` — sync, then return the updated stars list partial.
 pub async fn refresh_stars(lang: Lang, State(st): State<AppState>) -> Result<Html<String>> {
-    let report =
-        runner::run_sync(&st.client, &st.db, &st.config.archive_dir, "manual", false).await?;
+    let Some(client) = st.current_client() else {
+        let stars = st.db.get_stars_sorted().await?;
+        return Ok(Html(
+            views::stars_list_inner(lang, &stars, Some(lang.connect_github())).into_string(),
+        ));
+    };
+    let report = runner::run_sync(&client, &st.db, &st.config.archive_dir, "manual", false).await?;
     let stars = st.db.get_stars_sorted().await?;
     let banner = lang.refreshed_banner(report.added, report.updated, report.removed, stars.len());
     Ok(Html(
@@ -111,12 +116,15 @@ pub async fn discover_run(
     let Some(llm) = st.current_llm() else {
         return Ok(Html(views::discover_results(lang, &[]).into_string()));
     };
+    let Some(client) = st.current_client() else {
+        return Ok(Html(error_fragment(lang.connect_github())));
+    };
     let desc = form.description.trim();
     if desc.is_empty() {
         return Ok(Html(views::discover_results(lang, &[]).into_string()));
     }
     let stars = st.db.get_active_repos().await?;
-    match ai::discover(&llm, &st.client, &stars, desc, lang).await {
+    match ai::discover(&llm, &client, &stars, desc, lang).await {
         Ok(recs) => Ok(Html(views::discover_results(lang, &recs).into_string())),
         Err(e) => Ok(Html(error_fragment(&e.to_string()))),
     }
@@ -223,11 +231,13 @@ pub async fn archive_summary(
         return Ok(Html(String::new()));
     };
 
-    let readme = st
-        .client
-        .fetch_readme(repo.owner(), &repo.name)
-        .await
-        .unwrap_or(None);
+    let readme = match st.current_client() {
+        Some(c) => c
+            .fetch_readme(repo.owner(), &repo.name)
+            .await
+            .unwrap_or(None),
+        None => None,
+    };
     match ai::repo_summary(&llm, &repo, readme.as_deref(), lang).await {
         Ok(summary) => {
             let now = Utc::now().to_rfc3339();
@@ -274,14 +284,26 @@ pub struct SettingsQuery {
     saved: Option<String>,
 }
 
-/// `GET /settings` — configure the LLM provider/key/model from the browser.
+/// `GET /settings` — connect GitHub + configure the LLM, all from the browser.
 pub async fn settings_page(
     lang: Lang,
     State(st): State<AppState>,
     Query(q): Query<SettingsQuery>,
 ) -> Result<Html<String>> {
-    let current = st.current_llm();
-    let body = views::settings_page(lang, current.as_ref(), q.saved.is_some());
+    let client = st.current_client();
+    // Confirm whose stars will load (best-effort; ignore network errors).
+    let github_login = match &client {
+        Some(c) => c.login().await.ok(),
+        None => None,
+    };
+    let llm = st.current_llm();
+    let body = views::settings_page(
+        lang,
+        client.is_some(),
+        github_login.as_deref(),
+        llm.as_ref(),
+        q.saved.is_some(),
+    );
     Ok(Html(views::layout(
         lang,
         lang.nav_settings(),
@@ -292,16 +314,23 @@ pub async fn settings_page(
 
 #[derive(Deserialize)]
 pub struct SettingsForm {
+    github_token: String,
     provider: String,
     api_key: String,
     model: String,
 }
 
-/// `POST /settings` — persist settings to the local DB and hot-swap the LLM.
+/// `POST /settings` — persist to the local DB and hot-swap GitHub + LLM clients.
 pub async fn settings_save(
     State(st): State<AppState>,
     Form(form): Form<SettingsForm>,
 ) -> Result<Response> {
+    // Only overwrite a token/key when a new one is supplied (blank keeps current).
+    if !form.github_token.trim().is_empty() {
+        st.db
+            .set_setting("github_token", form.github_token.trim())
+            .await?;
+    }
     if let Some(p) = crate::llm::Provider::parse(&form.provider) {
         st.db.set_setting("llm_provider", p.slug()).await?;
     }
@@ -312,6 +341,7 @@ pub async fn settings_save(
             .set_setting("llm_api_key", form.api_key.trim())
             .await?;
     }
+    st.reload_github().await?;
     st.reload_llm().await?;
     Ok((StatusCode::SEE_OTHER, [(LOCATION, "/settings?saved=1")]).into_response())
 }

@@ -391,11 +391,79 @@ impl Lang {
     pub fn settings_note(self) -> &'static str {
         match self {
             Lang::En => {
-                "Stored only in your local database (git-ignored). The key is sent only to your chosen provider, never anywhere else."
+                "Keys are stored only in your local database (git-ignored), sent only to GitHub and your chosen AI provider — never anywhere else."
             }
             Lang::Ko => {
-                "키는 로컬 DB(git 제외)에만 저장되고, 선택한 프로바이더에만 전송됩니다. 그 외 어디에도 안 보냅니다."
+                "키는 로컬 DB(git 제외)에만 저장되고, GitHub와 선택한 AI 프로바이더에만 전송됩니다. 그 외 어디에도 안 보냅니다."
             }
+        }
+    }
+
+    // --- Settings: GitHub section --------------------------------------------
+    pub fn settings_github(self) -> &'static str {
+        match self {
+            Lang::En => "GitHub account",
+            Lang::Ko => "GitHub 계정",
+        }
+    }
+    pub fn settings_github_sub(self) -> &'static str {
+        match self {
+            Lang::En => {
+                "Your token decides whose stars load. It needs read access to public repos."
+            }
+            Lang::Ko => {
+                "이 토큰이 '누구의 스타를 불러올지' 결정합니다. 공개 저장소 읽기 권한이 필요해요."
+            }
+        }
+    }
+    pub fn settings_github_on(self, login: &str) -> String {
+        match self {
+            Lang::En => format!("✅ Connected as @{login}"),
+            Lang::Ko => format!("✅ @{login} (으)로 연결됨"),
+        }
+    }
+    pub fn settings_github_on_plain(self) -> &'static str {
+        match self {
+            Lang::En => "✅ GitHub token set",
+            Lang::Ko => "✅ GitHub 토큰 설정됨",
+        }
+    }
+    pub fn settings_github_off(self) -> &'static str {
+        match self {
+            Lang::En => "⚪ Not connected — paste a token below to load your stars.",
+            Lang::Ko => "⚪ 미연결 — 아래에 토큰을 넣으면 내 스타를 불러옵니다.",
+        }
+    }
+    pub fn settings_github_token(self) -> &'static str {
+        match self {
+            Lang::En => "GitHub token",
+            Lang::Ko => "GitHub 토큰",
+        }
+    }
+    pub fn settings_github_token_ph(self) -> &'static str {
+        match self {
+            Lang::En => "Personal access token — leave blank to keep the current one",
+            Lang::Ko => "Personal access token — 비우면 기존 토큰 유지",
+        }
+    }
+    pub fn settings_github_help(self) -> &'static str {
+        match self {
+            Lang::En => {
+                "Create one at github.com/settings/tokens with read access to repositories."
+            }
+            Lang::Ko => "github.com/settings/tokens 에서 저장소 읽기 권한 토큰을 만드세요.",
+        }
+    }
+    pub fn settings_ai(self) -> &'static str {
+        match self {
+            Lang::En => "AI provider",
+            Lang::Ko => "AI 프로바이더",
+        }
+    }
+    pub fn connect_github(self) -> &'static str {
+        match self {
+            Lang::En => "Connect your GitHub in Settings (⚙) first.",
+            Lang::Ko => "먼저 설정(⚙)에서 GitHub를 연결하세요.",
         }
     }
 }

@@ -126,6 +126,23 @@ impl GithubClient {
         let resp = check(resp).await?;
         Ok(Some(resp.text().await?))
     }
+
+    /// The authenticated user's login (e.g. `kjhk3082`) — confirms whose stars
+    /// will load. Used by the settings page.
+    pub async fn login(&self) -> Result<String> {
+        let resp = self
+            .http
+            .get(format!("{API}/user"))
+            .header(ACCEPT, "application/vnd.github+json")
+            .send()
+            .await?;
+        let resp = check(resp).await?;
+        let v: serde_json::Value = resp.json().await?;
+        v["login"]
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| AppError::msg("GitHub /user returned no login"))
+    }
 }
 
 /// Turn a non-2xx response into a helpful error, detecting rate limits.
