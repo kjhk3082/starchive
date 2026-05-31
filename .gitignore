@@ -2,15 +2,15 @@
 .DS_Store
 *.swp
 
-# Rust
+# Rust (Cargo.lock IS committed — this is a binary app, for reproducible builds)
 /target
-Cargo.lock
 
-# Local data (DB is regenerable)
+# Local user data — generated at runtime, never part of the tool repo
 *.db
 *.db-wal
 *.db-shm
 /data
+/archive
 
 # Env
 .env
