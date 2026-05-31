@@ -164,7 +164,7 @@ pub async fn archive_view(
 /// `GET /export.md` — one combined markdown file of every starred repo's archive.
 pub async fn export_all(lang: Lang, State(st): State<AppState>) -> Result<Response> {
     let mut repos = st.db.get_active_repos().await?;
-    repos.sort_by(|a, b| a.full_name.to_lowercase().cmp(&b.full_name.to_lowercase()));
+    repos.sort_by_key(|r| r.full_name.to_lowercase());
 
     let mut out = String::new();
     out.push_str("# starchive — Starred Repositories\n\n");

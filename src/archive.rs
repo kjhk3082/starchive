@@ -229,7 +229,7 @@ pub async fn write_archive(dir: &Path, repo: &Repo, md: &str) -> Result<PathBuf>
 /// Regenerate `{dir}/INDEX.md` — a stars-sorted table of contents.
 pub async fn write_index(dir: &Path, repos: &[Repo]) -> Result<()> {
     let mut sorted: Vec<&Repo> = repos.iter().collect();
-    sorted.sort_by(|a, b| b.stargazers_count.cmp(&a.stargazers_count));
+    sorted.sort_by_key(|r| std::cmp::Reverse(r.stargazers_count));
 
     let mut s = String::from("# starchive — Starred Repository Index\n\n");
     s.push_str(&format!("{} repositories archived.\n\n", repos.len()));
