@@ -14,12 +14,6 @@ GitHub stars ──▶ local SQLite ──▶ AI-readable markdown archive
                       └──▶ dashboard: your stars + trending + "For You"
 ```
 
-## Screenshots
-
-| Your Stars | Archive (license + AI summary) |
-|---|---|
-| ![Stars dashboard](docs/screenshots/stars.png) | ![Archive](docs/screenshots/archive.png) |
-
 ## Why
 
 - **Your stars are a knowledge base.** starchive turns them into versioned markdown that
