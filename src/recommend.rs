@@ -44,12 +44,22 @@ pub fn build_profile(repos: &[Repo]) -> Profile {
     p
 }
 
+/// Why a repo was recommended — structured so the view layer can localize it
+/// (the ranking logic stays language-agnostic).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Reason {
+    /// The repo's language matches one the user stars (carries the language).
+    Language(String),
+    /// The repo shares these topics with the user's stars.
+    Topics(Vec<String>),
+}
+
 /// A trending repo scored against the user's profile.
 #[derive(Debug, Clone)]
 pub struct Scored {
     pub repo: Repo,
     pub score: f64,
-    pub reasons: Vec<String>,
+    pub reasons: Vec<Reason>,
 }
 
 const LANG_WEIGHT: f64 = 3.0;
@@ -78,7 +88,7 @@ pub fn score_trending(profile: &Profile, trending: &[Repo]) -> Vec<Scored> {
                 && let Some(&c) = profile.languages.get(lang)
             {
                 score += (c as f64 / max_lang) * LANG_WEIGHT;
-                reasons.push(format!("{lang} matches your stars"));
+                reasons.push(Reason::Language(lang.clone()));
             }
 
             let matched: Vec<String> = r
@@ -92,7 +102,7 @@ pub fn score_trending(profile: &Profile, trending: &[Repo]) -> Vec<Scored> {
                 score += (c / max_topic) * TOPIC_WEIGHT;
             }
             if !matched.is_empty() {
-                reasons.push(format!("topics: {}", matched.join(", ")));
+                reasons.push(Reason::Topics(matched));
             }
 
             // Tiny tiebreaker so popular repos win among equal matches.
@@ -150,8 +160,18 @@ mod tests {
         let scored = score_trending(&profile, &trending);
         assert_eq!(scored[0].repo.name, "match");
         assert!(scored[0].score > scored[1].score);
-        assert!(scored[0].reasons.iter().any(|r| r.contains("Rust")));
-        assert!(scored[0].reasons.iter().any(|r| r.contains("cli")));
+        assert!(
+            scored[0]
+                .reasons
+                .iter()
+                .any(|r| matches!(r, Reason::Language(l) if l == "Rust"))
+        );
+        assert!(
+            scored[0]
+                .reasons
+                .iter()
+                .any(|r| matches!(r, Reason::Topics(ts) if ts.contains(&"cli".to_string())))
+        );
         assert!(scored[1].reasons.is_empty());
     }
 

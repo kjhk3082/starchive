@@ -6,6 +6,7 @@ mod config;
 mod db;
 mod error;
 mod github;
+mod i18n;
 mod recommend;
 mod runner;
 mod sync;

@@ -84,6 +84,8 @@ pub fn router(state: AppState) -> Router {
         .route("/stars/refresh", post(handlers::refresh_stars))
         .route("/trending", get(handlers::trending))
         .route("/archive/{owner}/{name}", get(handlers::archive_view))
+        .route("/archive/{owner}/{name}/raw", get(handlers::archive_raw))
+        .route("/lang/{code}", get(handlers::set_lang))
         .with_state(state)
 }
 

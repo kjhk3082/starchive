@@ -64,6 +64,9 @@ starchive sync --git
 
 On the dashboard: browse **Trending** and **For You**, click through to GitHub, star what
 you like, then hit **Refresh** — new stars are detected, archived, and pinned to the top.
+The UI is bilingual (**English / 한국어** — toggle in the header; it also auto-detects your
+browser language). Open any repo's `📄 archive` and click **⬇ .md** to download its
+markdown file.
 
 ## Authentication
 
@@ -122,8 +125,11 @@ cargo install ripgrep
 - Install guess: `cargo install ripgrep`
 ```
 
-The DB is the source of truth; markdown is a regenerable artifact. Both the database and
-archive directory are local user data and are git-ignored in this repository.
+All files live under the archive directory (default `./archive/`) on your machine, so the
+whole catalog is just a folder you can open, grep, sync to a notes repo, or feed to an LLM.
+Individual files are also downloadable from the dashboard. The DB is the source of truth;
+markdown is a regenerable artifact. Both the database and archive directory are local user
+data and are git-ignored in this repository.
 
 ## How "trending" works
 
