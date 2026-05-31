@@ -19,8 +19,13 @@ font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 header{position:sticky;top:0;background:rgba(13,17,23,.85);backdrop-filter:blur(8px);
 border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:18px;z-index:10}
-header .logo{font-weight:800;font-size:19px;letter-spacing:-.4px;
+header .logo{font-weight:800;font-size:19px;letter-spacing:-.4px;cursor:pointer;text-decoration:none;
 background:linear-gradient(90deg,#e6edf3,#d29922);-webkit-background-clip:text;background-clip:text;color:transparent}
+header .logo:hover{text-decoration:none;filter:brightness(1.15)}
+.viewtabs{display:inline-flex;gap:2px;background:var(--chip);border-radius:9px;padding:3px}
+.viewtabs button{background:transparent;border:0;color:var(--muted);font:inherit;font-size:13px;
+padding:6px 12px;border-radius:7px;cursor:pointer}
+.viewtabs button.active{background:var(--card);color:var(--fg);font-weight:600}
 nav{display:flex;gap:4px;margin-left:6px}
 nav a{padding:6px 13px;border-radius:8px;color:var(--muted);font-weight:500}
 nav a.active{background:var(--chip);color:var(--fg)}
@@ -88,6 +93,10 @@ footer b{color:var(--fg)}
 
 const FILTER_JS: &str = r#"
 function starFilter(q){q=q.toLowerCase();document.querySelectorAll('#stars-list .card').forEach(function(c){c.style.display=(c.dataset.search||'').includes(q)?'':'none'})}
+"#;
+
+const VIEW_JS: &str = r#"
+function scView(v){var r=document.getElementById('view-read'),m=document.getElementById('view-md'),tr=document.getElementById('tab-read'),tm=document.getElementById('tab-md');var md=v==='md';r.style.display=md?'none':'';m.style.display=md?'':'none';tr.classList.toggle('active',!md);tm.classList.toggle('active',md);}
 "#;
 
 fn lang_color(lang: &str) -> &'static str {
@@ -161,7 +170,7 @@ pub fn layout(lang: Lang, title: &str, active: &str, content: Markup) -> String 
             }
             body {
                 header {
-                    div.logo { "starchive" }
+                    a.logo href="/" { "starchive" }
                     nav {
                         (nav_item("/", "stars", lang.nav_stars()))
                         (nav_item("/trending", "trending", lang.nav_trending()))
@@ -273,9 +282,10 @@ pub fn stars_page(lang: Lang, stars: &[StarView]) -> Markup {
                 h1 { (lang.stars_title()) }
                 div.sub { (lang.stars_count(stars.len())) }
             }
-            div style="display:flex;gap:10px;align-items:center" {
+            div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap" {
                 input.search type="search" placeholder=(lang.search_placeholder())
                     oninput="starFilter(this.value)";
+                a.btn.ghost href="/export.md" download="starchive-stars.md" { (lang.export_all()) }
                 button.btn hx-post="/stars/refresh" hx-target="#stars-list" hx-swap="innerHTML" {
                     (lang.refresh()) span.spin { " …" }
                 }
@@ -409,12 +419,14 @@ pub fn ai_summary(lang: Lang, summary: &str) -> Markup {
     }
 }
 
-/// Markdown archive viewer: license box, optional AI summary, rendered README.
+/// Markdown archive viewer with a Reading (human) / Markdown (AI) toggle, a
+/// license box, and an optional AI summary.
 pub fn archive_page(
     lang: Lang,
     owner: &str,
     name: &str,
     body_html: &str,
+    raw_md: &str,
     license: Option<&LicenseInfo>,
     llm_available: bool,
 ) -> Markup {
@@ -422,7 +434,11 @@ pub fn archive_page(
     html! {
         div.row {
             div { h1 { (full) } div.sub { (lang.archive_subtitle()) } }
-            div style="display:flex;gap:8px" {
+            div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap" {
+                div.viewtabs {
+                    button #tab-read class="active" onclick="scView('read')" { (lang.view_reading()) }
+                    button #tab-md onclick="scView('md')" { (lang.view_markdown()) }
+                }
                 a.btn href=(format!("/archive/{owner}/{name}/raw")) { "⬇ .md" }
                 a.btn.ghost href="/" { (lang.back()) }
             }
@@ -434,6 +450,8 @@ pub fn archive_page(
                 div.ai { h3 { (lang.ai_summary_title()) } div.sub { (lang.ai_generating()) } }
             }
         }
-        div.prose { (PreEscaped(body_html)) }
+        div #view-read.prose { (PreEscaped(body_html)) }
+        pre #view-md style="display:none" { (raw_md) }
+        script { (PreEscaped(VIEW_JS)) }
     }
 }

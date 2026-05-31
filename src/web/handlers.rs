@@ -146,10 +146,61 @@ pub async fn archive_view(
         &owner,
         &name,
         &body_html,
+        &md,
         license.as_ref(),
         st.llm.is_some(),
     );
     Ok(Html(views::layout(lang, &title, "stars", body)))
+}
+
+/// `GET /export.md` — one combined markdown file of every starred repo's archive.
+pub async fn export_all(lang: Lang, State(st): State<AppState>) -> Result<Response> {
+    let mut repos = st.db.get_active_repos().await?;
+    repos.sort_by(|a, b| a.full_name.to_lowercase().cmp(&b.full_name.to_lowercase()));
+
+    let mut out = String::new();
+    out.push_str("# starchive — Starred Repositories\n\n");
+    out.push_str(&lang.export_intro(repos.len()));
+    out.push_str("\n\n## Contents\n\n");
+    for r in &repos {
+        out.push_str(&format!("- {}\n", r.full_name));
+    }
+    out.push_str("\n---\n\n");
+
+    for r in &repos {
+        let path = st
+            .config
+            .archive_dir
+            .join(r.owner())
+            .join(format!("{}.md", r.name));
+        match tokio::fs::read_to_string(&path).await {
+            Ok(md) => {
+                out.push_str(md.trim_end());
+                out.push_str("\n\n---\n\n");
+            }
+            // Repo not archived yet → a minimal stub so the export stays complete.
+            Err(_) => {
+                out.push_str(&format!(
+                    "# {}\n\n> {}\n\n{}\n\n---\n\n",
+                    r.full_name,
+                    r.description.as_deref().unwrap_or(""),
+                    r.html_url
+                ));
+            }
+        }
+    }
+
+    Ok((
+        [
+            (CONTENT_TYPE, "text/markdown; charset=utf-8".to_string()),
+            (
+                CONTENT_DISPOSITION,
+                "attachment; filename=\"starchive-stars.md\"".to_string(),
+            ),
+        ],
+        out,
+    )
+        .into_response())
 }
 
 /// `POST /archive/{owner}/{name}/summary` — AI summary (cached per repo+lang).

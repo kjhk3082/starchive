@@ -87,6 +87,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(handlers::dashboard))
         .route("/stars/refresh", post(handlers::refresh_stars))
+        .route("/export.md", get(handlers::export_all))
         .route("/trending", get(handlers::trending))
         .route("/trending/refresh", post(handlers::trending_refresh))
         .route(
