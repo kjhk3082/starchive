@@ -34,8 +34,8 @@ GitHub stars ──▶ local SQLite ──▶ AI-readable markdown archive
 
 ## Install
 
-Requires [Rust](https://rustup.rs) 1.85+ and either the [GitHub CLI](https://cli.github.com)
-(`gh auth login`) or a `GITHUB_TOKEN`.
+Requires [Rust](https://rustup.rs) **1.88+** (the code uses edition-2024 let-chains).
+No GitHub setup needed up front — you can connect your account from the dashboard.
 
 ```sh
 cargo install --git https://github.com/kjhk3082/starchive
@@ -73,12 +73,18 @@ markdown file.
 
 ## Authentication
 
-starchive resolves a GitHub token in this order:
+Two things are configurable: your **GitHub token** (decides whose stars load) and an
+optional **AI provider key**. The easiest way is the dashboard **Settings (⚙)** page —
+paste a token, click Save, and you'll see *"Connected as @you"*. No `.env` or `gh` needed.
 
-1. `GITHUB_TOKEN` environment variable
-2. `gh auth token` (the GitHub CLI)
+Under the hood, each credential resolves in this order:
 
-A classic or fine-grained token with public read scope is enough (the same one `gh` uses).
+1. value saved via the **Settings page** (stored in the local, git-ignored SQLite DB)
+2. environment variable (`GITHUB_TOKEN` / `OPENROUTER_API_KEY` / …) — see `.env.example`
+3. for GitHub only, `gh auth token` (the GitHub CLI)
+
+A GitHub token with read access to public repositories is enough. **Keys are never written
+to source or committed** — only to the local DB (git-ignored) or your own environment.
 
 ## Configuration
 

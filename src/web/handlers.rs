@@ -370,8 +370,8 @@ fn render_summary(lang: Lang, text: &str) -> String {
 }
 
 fn error_fragment(msg: &str) -> String {
-    let safe = msg.replace('<', "&lt;");
-    format!("<div class=\"empty\"><p class=\"sub\">⚠ {safe}</p></div>")
+    // Rendered through maud so the message is auto-escaped (no hand-rolled escaping).
+    maud::html! { div.empty { p.sub { "⚠ " (msg) } } }.into_string()
 }
 
 fn render_markdown_html(md: &str) -> String {
@@ -383,7 +383,17 @@ fn render_markdown_html(md: &str) -> String {
     comrak::markdown_to_html(md, &opts)
 }
 
+/// A single safe path component: blocks traversal via `..`, `/`, `\`, or NUL.
+/// (axum percent-decodes path params, so `%2e%2e`/`%2f` can smuggle separators
+/// into a captured segment — reject them before touching the filesystem.)
+fn safe_segment(s: &str) -> bool {
+    !s.is_empty() && s != "." && s != ".." && !s.chars().any(|c| matches!(c, '/' | '\\' | '\0'))
+}
+
 async fn read_archive(st: &AppState, owner: &str, name: &str) -> Result<String> {
+    if !safe_segment(owner) || !safe_segment(name) {
+        return Err(AppError::msg(format!("No archive for {owner}/{name}.")));
+    }
     let path = st.config.archive_dir.join(owner).join(format!("{name}.md"));
     tokio::fs::read_to_string(&path).await.map_err(|_| {
         AppError::msg(format!(
