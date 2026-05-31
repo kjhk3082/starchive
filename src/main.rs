@@ -3,6 +3,7 @@
 
 mod config;
 mod error;
+mod github;
 
 use clap::{Parser, Subcommand};
 
