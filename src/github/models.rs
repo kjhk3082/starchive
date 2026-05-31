@@ -87,6 +87,32 @@ pub struct StarredRepo {
     pub repo: Repo,
 }
 
+#[cfg(test)]
+impl Repo {
+    /// Test fixture builder shared across module tests.
+    pub fn sample(id: i64, owner: &str, name: &str, language: Option<&str>, topics: &[&str]) -> Self {
+        Repo {
+            id,
+            name: name.to_string(),
+            full_name: format!("{owner}/{name}"),
+            owner: Owner { login: owner.to_string() },
+            html_url: format!("https://github.com/{owner}/{name}"),
+            description: Some(format!("{name} — a sample repository")),
+            homepage: None,
+            language: language.map(|s| s.to_string()),
+            stargazers_count: 100,
+            forks_count: 10,
+            open_issues_count: 1,
+            topics: topics.iter().map(|s| s.to_string()).collect(),
+            license: Some(License { spdx_id: Some("MIT".to_string()) }),
+            default_branch: Some("main".to_string()),
+            pushed_at: Some("2025-01-01T00:00:00Z".to_string()),
+            created_at: Some("2020-01-01T00:00:00Z".to_string()),
+            updated_at: Some("2025-01-01T00:00:00Z".to_string()),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
     #[serde(default)]

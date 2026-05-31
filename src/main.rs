@@ -2,8 +2,10 @@
 //! and discover trending repos from an htmx dashboard.
 
 mod config;
+mod db;
 mod error;
 mod github;
+mod sync;
 
 use clap::{Parser, Subcommand};
 
