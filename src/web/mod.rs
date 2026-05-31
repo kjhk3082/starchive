@@ -5,7 +5,7 @@
 mod handlers;
 pub mod views;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use axum::Router;
 use axum::http::StatusCode;
@@ -17,7 +17,7 @@ use crate::config::Config;
 use crate::db::Db;
 use crate::error::{AppError, Result};
 use crate::github::{self, GithubClient, SearchParams, trending_query};
-use crate::llm::Llm;
+use crate::llm::{Llm, Provider};
 
 const TRENDING_TTL_MINUTES: i64 = 60;
 const TRENDING_WINDOW_DAYS: i64 = 14;
@@ -35,7 +35,8 @@ pub struct AppState {
     pub db: Db,
     pub client: GithubClient,
     pub config: Arc<Config>,
-    pub llm: Option<Llm>,
+    /// Runtime-swappable so the settings page can change the key without a restart.
+    llm: Arc<RwLock<Option<Llm>>>,
     trending: Arc<Mutex<TrendingCache>>,
 }
 
@@ -45,9 +46,21 @@ impl AppState {
             db,
             client,
             config: Arc::new(config),
-            llm,
+            llm: Arc::new(RwLock::new(llm)),
             trending: Arc::new(Mutex::new(TrendingCache::default())),
         }
+    }
+
+    /// Clone out the current LLM client (never held across an await).
+    pub fn current_llm(&self) -> Option<Llm> {
+        self.llm.read().unwrap().clone()
+    }
+
+    /// Re-resolve the LLM from DB settings (then env) and hot-swap it in.
+    async fn reload_llm(&self) -> Result<()> {
+        let resolved = resolve_llm(&self.db).await?;
+        *self.llm.write().unwrap() = resolved;
+        Ok(())
     }
 
     /// Trending repos from a 1-hour in-memory cache (Search API is 30 req/min).
@@ -100,21 +113,40 @@ pub fn router(state: AppState) -> Router {
             "/archive/{owner}/{name}/summary",
             post(handlers::archive_summary),
         )
+        .route(
+            "/settings",
+            get(handlers::settings_page).post(handlers::settings_save),
+        )
         .route("/lang/{code}", get(handlers::set_lang))
         .route("/favicon.svg", get(handlers::favicon))
         .with_state(state)
+}
+
+/// Resolve the active LLM: dashboard-entered settings (DB) first, else env.
+async fn resolve_llm(db: &Db) -> Result<Option<Llm>> {
+    if let Some(key) = db.get_setting("llm_api_key").await?
+        && !key.trim().is_empty()
+    {
+        let provider = db
+            .get_setting("llm_provider")
+            .await?
+            .as_deref()
+            .and_then(Provider::parse)
+            .unwrap_or(Provider::OpenRouter);
+        let model = db.get_setting("llm_model").await?;
+        return Ok(Some(Llm::build(provider, key, model)));
+    }
+    Ok(Llm::from_env())
 }
 
 pub async fn serve(port: u16) -> Result<()> {
     let config = Config::load()?;
     let db = Db::open(&config.db_path).await?;
     let client = GithubClient::new(&config.token)?;
-    let llm = Llm::from_env();
+    let llm = resolve_llm(&db).await?;
     match &llm {
         Some(l) => println!("LLM enabled: {} ({})", l.provider().label(), l.model()),
-        None => println!(
-            "LLM disabled (set OPENROUTER_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY to enable)"
-        ),
+        None => println!("LLM disabled — add a key in the dashboard Settings page, or via .env"),
     }
     let state = AppState::new(db, client, config, llm);
 

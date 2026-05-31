@@ -30,6 +30,26 @@ impl Provider {
             Provider::OpenAI => "OpenAI",
         }
     }
+    pub fn slug(self) -> &'static str {
+        match self {
+            Provider::OpenRouter => "openrouter",
+            Provider::Anthropic => "anthropic",
+            Provider::OpenAI => "openai",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Provider> {
+        match s.trim() {
+            "openrouter" => Some(Provider::OpenRouter),
+            "anthropic" => Some(Provider::Anthropic),
+            "openai" => Some(Provider::OpenAI),
+            _ => None,
+        }
+    }
+    /// The default model id, shown as a placeholder in the settings form.
+    pub fn placeholder_model(self) -> &'static str {
+        self.default_model()
+    }
+    pub const ALL: [Provider; 3] = [Provider::OpenRouter, Provider::Anthropic, Provider::OpenAI];
 }
 
 #[derive(Clone)]
@@ -61,6 +81,19 @@ impl Llm {
             api_key,
             model,
         })
+    }
+
+    /// Build from explicit values (used by the dashboard settings page).
+    pub fn build(provider: Provider, api_key: String, model: Option<String>) -> Self {
+        let model = model
+            .filter(|m| !m.trim().is_empty())
+            .unwrap_or_else(|| provider.default_model().to_string());
+        Self {
+            http: reqwest::Client::new(),
+            provider,
+            api_key,
+            model,
+        }
     }
 
     pub fn provider(&self) -> Provider {

@@ -290,12 +290,8 @@ impl Lang {
     }
     pub fn discover_nokey_hint(self) -> &'static str {
         match self {
-            Lang::En => {
-                "Set OPENROUTER_API_KEY (or ANTHROPIC_API_KEY / OPENAI_API_KEY) in .env to enable AI discovery."
-            }
-            Lang::Ko => {
-                ".env에 OPENROUTER_API_KEY(또는 ANTHROPIC_API_KEY / OPENAI_API_KEY)를 넣으면 AI 발견 기능이 켜집니다."
-            }
+            Lang::En => "Open Settings (⚙) and add an API key to enable AI discovery.",
+            Lang::Ko => "설정(⚙)에서 API 키를 추가하면 AI 발견 기능이 켜집니다.",
         }
     }
     pub fn your_star(self) -> &'static str {
@@ -322,6 +318,84 @@ impl Lang {
         match self {
             Lang::En => "Generating…",
             Lang::Ko => "생성 중…",
+        }
+    }
+
+    // --- Settings page -------------------------------------------------------
+    pub fn nav_settings(self) -> &'static str {
+        match self {
+            Lang::En => "Settings",
+            Lang::Ko => "설정",
+        }
+    }
+    pub fn settings_title(self) -> &'static str {
+        match self {
+            Lang::En => "Settings",
+            Lang::Ko => "설정",
+        }
+    }
+    pub fn settings_sub(self) -> &'static str {
+        match self {
+            Lang::En => "Connect an AI provider to enable summaries, license help, and discovery.",
+            Lang::Ko => "AI 프로바이더를 연결하면 요약·라이선스 설명·발견 기능이 켜집니다.",
+        }
+    }
+    pub fn settings_status_on(self, provider: &str, model: &str) -> String {
+        match self {
+            Lang::En => format!("✅ Connected — {provider} · {model}"),
+            Lang::Ko => format!("✅ 연결됨 — {provider} · {model}"),
+        }
+    }
+    pub fn settings_status_off(self) -> &'static str {
+        match self {
+            Lang::En => "⚪ Not connected yet — add a key below.",
+            Lang::Ko => "⚪ 아직 연결 안 됨 — 아래에 키를 입력하세요.",
+        }
+    }
+    pub fn settings_provider(self) -> &'static str {
+        match self {
+            Lang::En => "Provider",
+            Lang::Ko => "프로바이더",
+        }
+    }
+    pub fn settings_key(self) -> &'static str {
+        match self {
+            Lang::En => "API key",
+            Lang::Ko => "API 키",
+        }
+    }
+    pub fn settings_key_ph(self) -> &'static str {
+        match self {
+            Lang::En => "Paste your key — leave blank to keep the current one",
+            Lang::Ko => "키 붙여넣기 — 비우면 기존 키 유지",
+        }
+    }
+    pub fn settings_model(self) -> &'static str {
+        match self {
+            Lang::En => "Model (optional)",
+            Lang::Ko => "모델 (선택)",
+        }
+    }
+    pub fn settings_save_btn(self) -> &'static str {
+        match self {
+            Lang::En => "Save",
+            Lang::Ko => "저장",
+        }
+    }
+    pub fn settings_saved(self) -> &'static str {
+        match self {
+            Lang::En => "Saved ✓",
+            Lang::Ko => "저장됨 ✓",
+        }
+    }
+    pub fn settings_note(self) -> &'static str {
+        match self {
+            Lang::En => {
+                "Stored only in your local database (git-ignored). The key is sent only to your chosen provider, never anywhere else."
+            }
+            Lang::Ko => {
+                "키는 로컬 DB(git 제외)에만 저장되고, 선택한 프로바이더에만 전송됩니다. 그 외 어디에도 안 보냅니다."
+            }
         }
     }
 }

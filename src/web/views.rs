@@ -8,6 +8,7 @@ use crate::db::StarView;
 use crate::github::models::Repo;
 use crate::i18n::Lang;
 use crate::license::LicenseInfo;
+use crate::llm::{Llm, Provider};
 use crate::recommend::{Reason, Scored};
 
 const CSS: &str = r#"
@@ -81,6 +82,11 @@ border:1px solid rgba(163,113,247,.35);border-radius:12px;padding:14px 16px;marg
 textarea{background:var(--card);border:1px solid var(--border);color:var(--fg);border-radius:10px;
 padding:14px;font:inherit;width:100%;min-height:120px;resize:vertical}
 textarea:focus{outline:none;border-color:var(--accent)}
+.frow{margin:16px 0;max-width:440px}
+.frow label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+.frow select,.frow input{background:var(--card);border:1px solid var(--border);color:var(--fg);
+border-radius:8px;padding:10px 12px;font:inherit;font-size:14px;width:100%}
+.frow select:focus,.frow input:focus{outline:none;border-color:var(--accent)}
 .prose{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px 22px}
 .prose img{max-width:100%}.prose pre{background:#0d1117;padding:14px;border-radius:8px;overflow:auto}
 .prose code{background:#0d1117;padding:1px 5px;border-radius:4px;font-size:90%}
@@ -175,6 +181,7 @@ pub fn layout(lang: Lang, title: &str, active: &str, content: Markup) -> String 
                         (nav_item("/", "stars", lang.nav_stars()))
                         (nav_item("/trending", "trending", lang.nav_trending()))
                         (nav_item("/discover", "discover", lang.nav_discover()))
+                        (nav_item("/settings", "settings", "⚙"))
                     }
                     div.langtoggle {
                         a href="/lang/en" class=(if lang == Lang::En { "active" } else { "" }) { "EN" }
@@ -453,5 +460,48 @@ pub fn archive_page(
         div #view-read.prose { (PreEscaped(body_html)) }
         pre #view-md style="display:none" { (raw_md) }
         script { (PreEscaped(VIEW_JS)) }
+    }
+}
+
+/// Settings page: connect an AI provider (key stored locally, never committed).
+pub fn settings_page(lang: Lang, current: Option<&Llm>, saved: bool) -> Markup {
+    let cur_provider = current.map(|l| l.provider());
+    let cur_model = current.map(|l| l.model()).unwrap_or("");
+    let ph_model = cur_provider
+        .unwrap_or(Provider::OpenRouter)
+        .placeholder_model();
+    html! {
+        div.row { div { h1 { (lang.settings_title()) } div.sub { (lang.settings_sub()) } } }
+        @if saved { div.banner { (lang.settings_saved()) } }
+
+        div.sub style="margin-bottom:6px" {
+            @match current {
+                Some(l) => { (lang.settings_status_on(l.provider().label(), l.model())) }
+                None => { (lang.settings_status_off()) }
+            }
+        }
+
+        form method="post" action="/settings" {
+            div.frow {
+                label { (lang.settings_provider()) }
+                select name="provider" {
+                    @for p in Provider::ALL {
+                        option value=(p.slug()) selected[cur_provider == Some(p)] { (p.label()) }
+                    }
+                }
+            }
+            div.frow {
+                label { (lang.settings_key()) }
+                input type="password" name="api_key" autocomplete="off"
+                    placeholder=(lang.settings_key_ph());
+            }
+            div.frow {
+                label { (lang.settings_model()) }
+                input type="text" name="model" value=(cur_model) placeholder=(ph_model);
+            }
+            button.btn type="submit" { (lang.settings_save_btn()) }
+        }
+
+        p.sub style="margin-top:18px;max-width:560px" { (lang.settings_note()) }
     }
 }

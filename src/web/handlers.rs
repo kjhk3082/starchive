@@ -1,7 +1,7 @@
 //! Route handlers. Rendering handlers take a `lang: Lang` extractor and return
 //! `Result<Html<String>>`; `AppError` renders as a 500 (see [`super`]).
 
-use axum::extract::{Form, Path, State};
+use axum::extract::{Form, Path, Query, State};
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_TYPE, LOCATION, REFERER, SET_COOKIE};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
@@ -88,7 +88,7 @@ fn profile_note(lang: Lang, profile: &Profile) -> String {
 
 /// `GET /discover` — project-based discovery form.
 pub async fn discover_page(lang: Lang, State(st): State<AppState>) -> Result<Html<String>> {
-    let body = views::discover_page(lang, st.llm.is_some());
+    let body = views::discover_page(lang, st.current_llm().is_some());
     Ok(Html(views::layout(
         lang,
         lang.nav_discover(),
@@ -108,7 +108,7 @@ pub async fn discover_run(
     State(st): State<AppState>,
     Form(form): Form<DiscoverForm>,
 ) -> Result<Html<String>> {
-    let Some(llm) = &st.llm else {
+    let Some(llm) = st.current_llm() else {
         return Ok(Html(views::discover_results(lang, &[]).into_string()));
     };
     let desc = form.description.trim();
@@ -116,7 +116,7 @@ pub async fn discover_run(
         return Ok(Html(views::discover_results(lang, &[]).into_string()));
     }
     let stars = st.db.get_active_repos().await?;
-    match ai::discover(llm, &st.client, &stars, desc, lang).await {
+    match ai::discover(&llm, &st.client, &stars, desc, lang).await {
         Ok(recs) => Ok(Html(views::discover_results(lang, &recs).into_string())),
         Err(e) => Ok(Html(error_fragment(&e.to_string()))),
     }
@@ -148,7 +148,7 @@ pub async fn archive_view(
         &body_html,
         &md,
         license.as_ref(),
-        st.llm.is_some(),
+        st.current_llm().is_some(),
     );
     Ok(Html(views::layout(lang, &title, "stars", body)))
 }
@@ -209,7 +209,7 @@ pub async fn archive_summary(
     State(st): State<AppState>,
     Path((owner, name)): Path<(String, String)>,
 ) -> Result<Html<String>> {
-    let Some(llm) = &st.llm else {
+    let Some(llm) = st.current_llm() else {
         return Ok(Html(String::new()));
     };
     let Some(repo_id) = st.db.repo_id_by_full_name(&owner, &name).await? else {
@@ -228,7 +228,7 @@ pub async fn archive_summary(
         .fetch_readme(repo.owner(), &repo.name)
         .await
         .unwrap_or(None);
-    match ai::repo_summary(llm, &repo, readme.as_deref(), lang).await {
+    match ai::repo_summary(&llm, &repo, readme.as_deref(), lang).await {
         Ok(summary) => {
             let now = Utc::now().to_rfc3339();
             st.db
@@ -266,6 +266,54 @@ pub async fn archive_raw(
 pub async fn favicon() -> Response {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#d29922"><path d="M12 .6l3.1 7.3 7.9.6-6 5.1 1.9 7.7L12 18.3 5.1 22.4 7 14.7l-6-5.1 7.9-.6z"/></svg>"##;
     ([(CONTENT_TYPE, "image/svg+xml")], svg).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct SettingsQuery {
+    #[serde(default)]
+    saved: Option<String>,
+}
+
+/// `GET /settings` — configure the LLM provider/key/model from the browser.
+pub async fn settings_page(
+    lang: Lang,
+    State(st): State<AppState>,
+    Query(q): Query<SettingsQuery>,
+) -> Result<Html<String>> {
+    let current = st.current_llm();
+    let body = views::settings_page(lang, current.as_ref(), q.saved.is_some());
+    Ok(Html(views::layout(
+        lang,
+        lang.nav_settings(),
+        "settings",
+        body,
+    )))
+}
+
+#[derive(Deserialize)]
+pub struct SettingsForm {
+    provider: String,
+    api_key: String,
+    model: String,
+}
+
+/// `POST /settings` — persist settings to the local DB and hot-swap the LLM.
+pub async fn settings_save(
+    State(st): State<AppState>,
+    Form(form): Form<SettingsForm>,
+) -> Result<Response> {
+    if let Some(p) = crate::llm::Provider::parse(&form.provider) {
+        st.db.set_setting("llm_provider", p.slug()).await?;
+    }
+    st.db.set_setting("llm_model", form.model.trim()).await?;
+    // Only overwrite the key when a new one is supplied (blank keeps the current).
+    if !form.api_key.trim().is_empty() {
+        st.db
+            .set_setting("llm_api_key", form.api_key.trim())
+            .await?;
+    }
+    st.reload_llm().await?;
+    Ok((StatusCode::SEE_OTHER, [(LOCATION, "/settings?saved=1")]).into_response())
 }
 
 /// `GET /lang/{code}` — set the language cookie and return to the previous page.

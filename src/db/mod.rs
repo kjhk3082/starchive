@@ -322,6 +322,27 @@ impl Db {
         Ok(())
     }
 
+    /// A local setting value (e.g. the LLM key entered via the dashboard).
+    pub async fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        let row: Option<(String,)> = sqlx::query_as("SELECT value FROM settings WHERE key = ?1")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row.map(|(v,)| v))
+    }
+
+    pub async fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     #[cfg(test)]
     pub async fn memory() -> Result<Self> {
         // A single shared connection so the in-memory DB persists across queries.
